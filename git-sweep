@@ -1,0 +1,53 @@
+#!/bin/bash
+
+HELP=`cat <<EOS
+
+Usage: git-sweep [-h | --help]
+
+git-sweep will remove all local branches that don't exist on any remote.
+It will prompt for confirmation before deleting any branches.
+EOS
+`
+
+while test $# -gt 0; do
+	case "$1" in
+		"-h"|"--help")
+			echo "$HELP"
+			exit
+			;;
+		*)
+			echo "Invalid option: $1"
+			echo "$HELP"
+			exit
+			;;
+	esac
+	shift
+done
+
+
+git remote | xargs git remote prune
+branchesToDelete=$(git branch -lvv | grep -v "\*" | cut -c 3- | awk '($3 ~ /^\[[^\]]+:$/ && $4 ~ /gone\]/) || ($3 !~ /^\[[^\]]+\/[^\]]+[\]:]$/) {print $1}')
+
+if [ -z "$branchesToDelete" ]; then
+	echo ""
+	echo "Found no local branches available to delete."
+	exit
+fi
+
+echo ""
+echo "Found the following local branches whose remotes have been deleted:"
+echo "$branchesToDelete"
+echo ""
+
+promptContinue() {
+	read -r -p "Do you want to delete these local branches? (y/N) " shouldContinue
+
+	shouldContinue="$(echo "$shouldContinue" | tr "[:upper:]" "[:lower:]")"
+
+	if [ "$shouldContinue" != "y" ] && [ "$shouldContinue" != "yes" ]; then
+		exit
+	fi
+}
+promptContinue
+
+echo "$branchesToDelete" | xargs git branch -D
